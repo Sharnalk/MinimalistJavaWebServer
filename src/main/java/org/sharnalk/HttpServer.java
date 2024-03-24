@@ -15,7 +15,7 @@ public class HttpServer extends Thread {
      *
      */
     public static void HttpServer(int port) throws IOException {
-        System.out.println("Server listening on port " + port);
+        System.out.println("Server listening on http://localhost:" + port);
         //Here you can change your ThreadPool
         ExecutorService executor = Executors.newFixedThreadPool(1);
         try(ServerSocket serverSocket = new ServerSocket(port)){
