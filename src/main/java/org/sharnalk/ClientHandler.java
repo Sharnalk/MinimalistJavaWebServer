@@ -16,29 +16,36 @@ public class ClientHandler implements Runnable{
      *
      * The URL format is expected to be http://host:port/resource-path.
      * If the requested resource exists within the src/main/resources directory, the server
-     * sends the resource content with a 200 OK response. Otherwise, a 404 Not Found response is sent.
+     * sends the content of the resource with a 200 OK response. Otherwise, a 404 Not Found response is sent.
+     *
+     * This class implements Runnable to allow its execution in a separate thread,
+     * enabling the server to handle multiple client connections concurrently.
      */
-    public static String response404 = "HTTP/1.1 404 Not Found\r\n\r\n";
-    public static String response200 = "HTTP/1.1 200 OK\r\n\r\n";
-    private final Socket clientSocket;
-
-    //Here you can specify the main directory you want to search in the navigator
+    private static String response404 = "HTTP/1.1 404 Not Found\r\n\r\n";
+    private static String response200 = "HTTP/1.1 200 OK\r\n\r\n";
     private static String ressource = "src/main/resources";
     private static DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss");
+
+    private final Socket clientSocket;
+
     public ClientHandler(Socket clientSocket) {
         this.clientSocket = clientSocket;
     }
 
+
+    /**
+     * Processes the client's request, generates, and sends the response.
+     * This method is called when the dedicated thread for this ClientHandler starts.
+     */
     @Override
     public void run() {
             try(BufferedReader clientRequest = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));){
                 OutputStream clientOutput = clientSocket.getOutputStream();
 
-                String[] request = requestHandler(clientRequest);
-                loggingHandler(request);
-                String route = request[1];
-
-                httpStaticResponse(route,clientOutput);
+                String[] request = parseHttpRequest(clientRequest);
+                String resourcePath = request[1];
+                sendHttpResponse(resourcePath,clientOutput);
+                logRequest(request);
                 clientOutput.close();
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -46,11 +53,13 @@ public class ClientHandler implements Runnable{
     }
 
     /**
-     * Provide a basic template for httpResponses
-     * @param clientOutput
-     * @throws IOException
+     * Generates and sends the HTTP response based on the requested route.
+     *
+     * @param route        The route requested by the HTTP request.
+     * @param clientOutput The output stream to the client to send the response.
+     * @throws IOException If an I/O error occurs while sending the response.
      */
-    private static void httpStaticResponse(String route, OutputStream clientOutput) throws IOException {
+    private static void sendHttpResponse(String route, OutputStream clientOutput) throws IOException {
         String filePath = ressource + (route.equals("/") ? "/default.html" : route);
         File file = new File(filePath);
         if (!file.exists()){
@@ -66,26 +75,32 @@ public class ClientHandler implements Runnable{
     }
 
     /**
+     * Reads and parses the HTTP request from the client.
      *
-     * @param clientRequest
-     * @return
-     * @throws IOException
+     * @param clientRequest The input stream from the client socket.
+     * @return An array of Strings containing elements of the first line of the HTTP request.
+     * @throws IOException If an I/O error occurs while reading the request.
      */
-    private static String[] requestHandler(BufferedReader clientRequest) throws IOException {
+    private static String[] parseHttpRequest(BufferedReader clientRequest) throws IOException {
         StringBuilder sb = new StringBuilder();
         String line = clientRequest.readLine();
         while (!line.isBlank()){
             sb.append(line+ " ");
             line = clientRequest.readLine();
         }
-        System.out.println(sb);
         String[] request = sb.toString().split(" ");
         return request;
     }
 
-    private static void loggingHandler(String[] request) throws IOException {
-        String header = Arrays.toString(Arrays.copyOfRange(request,0,3)).replace(",", " ");
+    /**
+     * Logs the HTTP request to the console.
+     *
+     * @param request The parsed HTTP request.
+     * @throws IOException If an error occurs during logging.
+     */
+    private static void logRequest(String[] request) throws IOException {
+        String requestHeader = String.join(" ", Arrays.copyOfRange(request, 0, 3));
         String URL = request[4];
-        System.out.println("URL : "+URL + " - - [" + LocalTime.now().format(timeFormatter)+"] " + header);
+        System.out.println(URL + " - - [" + LocalTime.now().format(timeFormatter)+"] " + requestHeader);
     }
 }
