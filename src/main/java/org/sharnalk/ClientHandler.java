@@ -1,6 +1,7 @@
 package org.sharnalk;
 
 import java.io.*;
+import java.net.MalformedURLException;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalTime;
@@ -21,10 +22,12 @@ public class ClientHandler implements Runnable{
      * This class implements Runnable to allow its execution in a separate thread,
      * enabling the server to handle multiple client connections concurrently.
      */
-    private static String response404 = "HTTP/1.1 404 Not Found\r\n\r\n";
-    private static String response200 = "HTTP/1.1 200 OK\r\n\r\n";
-    private static String ressource = "src/main/resources";
-    private static DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss");
+    public static final String RESPONSE_404 = "HTTP/1.1 404 Not Found";
+    public static final String RESPONSE_200 = "HTTP/1.1 200 OK";
+    private static final String DEFAULT_RESOURCE_PATH = "src/main/resources";
+    private static final String DEFAULT_PAGE = "/default.html";
+    private static final String NOT_FOUND_PAGE = "/404NotFound.html";
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     private final Socket clientSocket;
 
@@ -41,11 +44,10 @@ public class ClientHandler implements Runnable{
     public void run() {
             try(BufferedReader clientRequest = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));){
                 OutputStream clientOutput = clientSocket.getOutputStream();
-
                 String[] request = parseHttpRequest(clientRequest);
                 String resourcePath = request[1];
-                sendHttpResponse(resourcePath,clientOutput);
-                logRequest(request);
+                String serverResponse = sendHttpResponse(resourcePath,clientOutput);
+                logRequest(request, serverResponse);
                 clientOutput.close();
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -53,54 +55,78 @@ public class ClientHandler implements Runnable{
     }
 
     /**
-     * Generates and sends the HTTP response based on the requested route.
+     * Parses the initial line of an HTTP request received from the client.
      *
-     * @param route        The route requested by the HTTP request.
-     * @param clientOutput The output stream to the client to send the response.
-     * @throws IOException If an I/O error occurs while sending the response.
+     * This method reads the request from the client and extracts the initial request line,
+     * which contains the HTTP method, requested path, and HTTP version. It throws an
+     * {@link MalformedURLException} if the request line is malformed or empty, ensuring that
+     * subsequent processing is based on valid request syntax.
+     *
+     * @param clientRequest The input stream from the client socket, wrapped in a BufferedReader.
+     * @return An array of Strings containing the components of the request line.
+     * @throws IOException If an I/O error occurs while reading from the input stream.
+     * @throws MalformedURLException If the request line is malformed or empty.
      */
-    private static void sendHttpResponse(String route, OutputStream clientOutput) throws IOException {
-        String filePath = ressource + (route.equals("/") ? "/default.html" : route);
+    public static String[] parseHttpRequest(BufferedReader clientRequest) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        String line = clientRequest.readLine();
+        if (line.isBlank() || line == "") {
+            throw new MalformedURLException("Malformed Request");
+        }
+        while (!line.isBlank()){
+            sb.append(line + " ");
+            line = clientRequest.readLine();
+        }
+
+        return sb.toString().split(" ");
+    }
+
+    /**
+     * Generates and sends an HTTP response based on the requested resource path.
+     *
+     * This method attempts to locate the requested resource within the server's resource
+     * directory. If the resource exists, it sends a 200 OK response with the resource content.
+     * Otherwise, it sends a 404 Not Found response. The actual response, including the status
+     * line and content, is written to the client's output stream.
+     *
+     * @param route The requested resource path extracted from the HTTP request.
+     * @param clientOutput The output stream to the client, used to send the response.
+     * @throws IOException If an I/O error occurs while reading the resource or writing the response.
+     */
+    private static String sendHttpResponse(String route, OutputStream clientOutput) throws IOException {
+        String filePath = DEFAULT_RESOURCE_PATH + (route.equals("/") ? DEFAULT_PAGE : route);
+        String serverResponse = "";
         File file = new File(filePath);
         if (!file.exists()){
-            filePath = ressource + "/404NotFound.html";
-            clientOutput.write(response404.getBytes(StandardCharsets.UTF_8));
+            filePath = DEFAULT_RESOURCE_PATH + NOT_FOUND_PAGE;
+            serverResponse = RESPONSE_404;
         }else {
-            clientOutput.write(response200.getBytes(StandardCharsets.UTF_8));
+            serverResponse = RESPONSE_200;
         }
+
+        clientOutput.write(serverResponse.getBytes(StandardCharsets.UTF_8));
         try(FileInputStream fileInputStream = new FileInputStream(filePath)){
             clientOutput.write(fileInputStream.readAllBytes());
             clientOutput.flush();
         }
+        return serverResponse;
     }
 
     /**
-     * Reads and parses the HTTP request from the client.
+     * Logs the HTTP request and response status to the console.
      *
-     * @param clientRequest The input stream from the client socket.
-     * @return An array of Strings containing elements of the first line of the HTTP request.
-     * @throws IOException If an I/O error occurs while reading the request.
-     */
-    private static String[] parseHttpRequest(BufferedReader clientRequest) throws IOException {
-        StringBuilder sb = new StringBuilder();
-        String line = clientRequest.readLine();
-        while (!line.isBlank()){
-            sb.append(line+ " ");
-            line = clientRequest.readLine();
-        }
-        String[] request = sb.toString().split(" ");
-        return request;
-    }
-
-    /**
-     * Logs the HTTP request to the console.
+     * This method constructs a log entry for the HTTP request using the request method, path, and
+     * the server's response status. The log entry includes a timestamp and is printed to the console.
      *
-     * @param request The parsed HTTP request.
-     * @throws IOException If an error occurs during logging.
+     * @param request An array of Strings containing the components of the request line.
+     * @param serverResponse The HTTP status line of the server's response.
+     * @throws IOException If an error occurs during logging. Note: This exception is not expected
+     *                     to be thrown as the method currently does not perform I/O operations
+     *                     that could result in an IOException.
      */
-    private static void logRequest(String[] request) throws IOException {
-        String requestHeader = String.join(" ", Arrays.copyOfRange(request, 0, 3));
+    public static void logRequest(String[] request, String serverResponse) throws IOException {
+        String requestHeader = String.join(" ", Arrays.copyOfRange(request, 0, 2));
         String URL = request[4];
-        System.out.println(URL + " - - [" + LocalTime.now().format(timeFormatter)+"] " + requestHeader);
+        System.out.println(URL + " - - [" + LocalTime.now().format(TIME_FORMATTER)+"] " + requestHeader +" " + serverResponse);
     }
 }

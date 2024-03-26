@@ -22,9 +22,9 @@ public class HttpServer extends Thread {
      * according to the server's capacity and expected load. The default size is set to handle a single request at a time.
      */
     public static void HttpServer(int port) throws IOException {
-        System.out.println("Server listening on http://localhost:" + port +"\r\n");
         ExecutorService executor = Executors.newFixedThreadPool(1); //Thread pool size can be adjusted here
         try(ServerSocket serverSocket = new ServerSocket(port)){
+            System.out.println("Server listening on http://localhost:" + serverSocket.getLocalPort() +"\r\n");
             while (true){
                 Socket client = serverSocket.accept();
                 executor.submit(new ClientHandler(client));
