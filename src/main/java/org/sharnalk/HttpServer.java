@@ -1,34 +1,39 @@
 package org.sharnalk;
 
-import java.io.*;
+import java.io.IOException;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 public class HttpServer extends Thread {
     /**
-     * Initializes and runs an HTTP server on a specified port.
-     * This server listens for incoming client connections and handles them using a fixed-size thread pool.
+     * A simple HTTP server that listens on a specified port and IP address.
+     * It handles incoming connections with a thread pool, allowing for concurrent request processing.
      *
-     * @param port The port number on which the server will listen. Valid range is 1024 to 65535 for non-privileged services.
-     * @throws IOException If the server cannot bind to the specified port or if an I/O error occurs during server operation.
-     *
-     * Usage example:
-     * {@code
-     *   HttpServer.HttpServer(8080); // Starts the server on port 8080
-     * }
-     *
-     * Note: The size of the thread pool determines how many concurrent requests the server can handle. It can be adjusted
-     * according to the server's capacity and expected load. The default size is set to handle a single request at a time.
+     * @param port        Port to listen on, with 0 for dynamic allocation.
+     * @param inetAddress IP address to bind to, or null/"0.0.0.0" for all interfaces.
+     * @throws IOException if binding to the port fails or during server operation.
      */
-    public static void HttpServer(int port) throws IOException {
-        ExecutorService executor = Executors.newFixedThreadPool(1); //Thread pool size can be adjusted here
-        try(ServerSocket serverSocket = new ServerSocket(port)){
-            System.out.println("Server listening on http://localhost:" + serverSocket.getLocalPort() +"\r\n");
+    public static void HttpServer(int port, InetAddress inetAddress) throws IOException {
+        ExecutorService executor = Executors.newFixedThreadPool(1); // Adjustable thread pool size
+        int backlog = 50; // Backlog size, adjustable for different request queue capacities
+        try(ServerSocket serverSocket = new ServerSocket(port, backlog, inetAddress)){
+            logStartServer(serverSocket);
             while (true){
                 Socket client = serverSocket.accept();
                 executor.submit(new ClientHandler(client));
             }
         }
+    }
+
+    /**
+     * Logs server start information, including the listening address and port.
+     *
+     * @param serverSocket ServerSocket instance for access to address and port data.
+     */
+    private static void logStartServer(ServerSocket serverSocket){
+        String address = serverSocket.getInetAddress().getHostAddress().equals("0.0.0.0") ? "/localhost" : String.valueOf(serverSocket.getInetAddress());
+        System.out.println("Server listening on http:/"+ address + ":" + serverSocket.getLocalPort() +"\r\n");
     }
 }
