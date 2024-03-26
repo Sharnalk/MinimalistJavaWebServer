@@ -53,7 +53,6 @@ public class ArgumentsParser {
                 if (port < 0 || port > 65535){
                     throw new IllegalArgumentException("Port number out of valid range (0-65535): " + port);
                 }
-                System.out.println("Port selected: " + port);
             }
             System.out.println("Port selected: " + (cmd.hasOption("port") ? port : "using dynamic port allocation"));
 
